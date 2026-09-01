@@ -1,8 +1,9 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
-import { DRACOLoader } from "three/addons/loaders/DRACOLoader.js";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
+import BED_DATA from "./bed-data.js";
+import CHARACTER_DATA from "./character-data.js";
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x8b8790);
@@ -38,11 +39,6 @@ controls.maxDistance = 13;
 controls.maxPolarAngle = Math.PI * 0.49;
 controls.enabled = false;
 const loader = new GLTFLoader();
-loader.setDRACOLoader(
-  new DRACOLoader().setDecoderPath(
-    "https://cdn.jsdelivr.net/npm/three@0.168.0/examples/jsm/libs/draco/",
-  ),
-);
 
 const mat = (color, rough = 0.72, metal = 0) =>
   new THREE.MeshStandardMaterial({ color, roughness: rough, metalness: metal });
@@ -174,7 +170,7 @@ function selectMode(next) {
 panel
   .querySelectorAll("button")
   .forEach((b) => (b.onclick = () => selectMode(b.dataset.mode)));
-loader.load("./assets/bed-playable.glb", (g) => {
+loader.load(BED_DATA, (g) => {
   const bed = g.scene;
   bed.traverse((o) => {
     if (o.isMesh) {
@@ -192,7 +188,7 @@ loader.load("./assets/bed-playable.glb", (g) => {
   scene.add(bed);
 });
 loader.load(
-  "./assets/character-playable.glb",
+  CHARACTER_DATA,
   (g) => {
     character = g.scene;
     character.traverse((o) => {
