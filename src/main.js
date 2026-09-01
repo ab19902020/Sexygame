@@ -5,6 +5,7 @@ import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import BED_DATA from "./bed-data.js";
 import CHARACTER_DATA from "./character-data.js";
 
+
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x8b8790);
 scene.fog = new THREE.Fog(0x8b8790, 15, 26);
@@ -57,12 +58,13 @@ const box = (name, size, pos, color, rough = 0.72, metal = 0) => {
 box("floor", [12, 0.18, 10], [0, -0.09, 0], 0x65564f, 0.85);
 box("back wall", [12, 5, 0.18], [0, 2.5, -5], 0xd7d0c7, 0.95);
 box("side wall", [0.18, 5, 10], [-6, 2.5, 0], 0xc8c0b8, 0.95);
-// inset rug and platform bed
-box("rug", [5.6, 0.035, 4.1], [-2.4, 0.11, -1.55], 0x8b817c, 1);
+// inset rug beneath the correctly scaled bed
+box("rug", [4.25, 0.035, 3.8], [-1.1, 0.025, -1.25], 0x8b817c, 1);
 // furniture
-box("nightstand", [1.25, 1.05, 1.3], [-5.05, 0.58, -3.45], 0x4b3c36, 0.6);
+box("nightstand", [0.82, 0.72, 0.78], [-2.72, 0.38, -2.1], 0x4b3c36, 0.6);
+box("nightstand", [0.82, 0.72, 0.78], [0.52, 0.38, -2.1], 0x4b3c36, 0.6);
 box("dresser", [2.8, 1.45, 1.0], [3.9, 0.78, -4.32], 0x493d38, 0.65);
-box("bench", [3.1, 0.42, 1.1], [-2.7, 0.45, 1.72], 0x6b5550, 0.7);
+box("bench", [1.9, 0.42, 0.7], [-1.1, 0.45, 0.72], 0x6b5550, 0.7);
 for (let i = 0; i < 3; i++)
   box(
     "drawer",
@@ -84,12 +86,12 @@ for (let i = 0; i < 8; i++)
     0.85,
   );
 // lamps
-for (const x of [-5.05, -0.35]) {
+for (const x of [-2.72, 0.52]) {
   const stem = new THREE.Mesh(
     new THREE.CylinderGeometry(0.035, 0.05, 0.72, 14),
     mat(0xb79a74, 0.25, 0.5),
   );
-  stem.position.set(x, 1.45, -3.45);
+  stem.position.set(x, 1.02, -2.1);
   stem.castShadow = true;
   scene.add(stem);
   const shade = new THREE.Mesh(
@@ -100,10 +102,10 @@ for (const x of [-5.05, -0.35]) {
       side: THREE.DoubleSide,
     }),
   );
-  shade.position.set(x, 1.84, -3.45);
+  shade.position.set(x, 1.41, -2.1);
   scene.add(shade);
   const l = new THREE.PointLight(0xffd7a8, 15, 5, 2);
-  l.position.set(x, 1.8, -3.42);
+  l.position.set(x, 1.38, -2.06);
   l.castShadow = true;
   scene.add(l);
 }
@@ -117,7 +119,12 @@ fill.castShadow = true;
 fill.shadow.mapSize.set(1024, 1024);
 scene.add(fill);
 
+const BED_CENTER = new THREE.Vector3(-1.1, 0.55, -1.3);
+const BED_SIZE = new THREE.Vector3(2.1, 1.1, 2.35);
+const MODEL_FORWARD_OFFSET = Math.PI;
 let character,
+  characterVisual,
+  bed,
   mixer,
   sampleAction,
   baseY = 0,
@@ -170,28 +177,47 @@ function selectMode(next) {
 panel
   .querySelectorAll("button")
   .forEach((b) => (b.onclick = () => selectMode(b.dataset.mode)));
+function beginExperience() {
+  if (!character || !bed || !introPlaying) return;
+  selectMode("sequence");
+  modeStarted = clock.elapsedTime;
+  document.querySelector("#loading").style.opacity = 0;
+  setTimeout(() => document.querySelector("#loading")?.remove(), 500);
+  setTimeout(() => {
+    introPlaying = false;
+    controls.enabled = true;
+    selectMode("idle");
+    panel.style.opacity = "1";
+    panel.style.transform = "translateY(0)";
+    panel.style.pointerEvents = "auto";
+    document.querySelector("#hint").textContent =
+      "Scene complete · Choose a pose or drag to look";
+  }, 28000);
+}
 loader.load(BED_DATA, (g) => {
-  const bed = g.scene;
-  bed.traverse((o) => {
+  const model = g.scene;
+  model.traverse((o) => {
     if (o.isMesh) {
       o.castShadow = o.receiveShadow = true;
       o.material.envMapIntensity = 0.7;
     }
   });
-  const b = new THREE.Box3().setFromObject(bed),
+  const b = new THREE.Box3().setFromObject(model),
     s = b.getSize(new THREE.Vector3()),
     c = b.getCenter(new THREE.Vector3());
-  bed.position.sub(c);
-  bed.position.y += s.y / 2;
-  bed.scale.setScalar(4.7 / Math.max(s.x, s.z));
-  bed.position.set(-2.7, 0.02, -1.8);
+  model.position.set(-c.x, -c.y, -c.z);
+  bed = new THREE.Group();
+  bed.add(model);
+  bed.scale.set(BED_SIZE.x / s.x, BED_SIZE.y / s.y, BED_SIZE.z / s.z);
+  bed.position.copy(BED_CENTER);
   scene.add(bed);
+  beginExperience();
 });
 loader.load(
   CHARACTER_DATA,
   (g) => {
-    character = g.scene;
-    character.traverse((o) => {
+    characterVisual = g.scene;
+    characterVisual.traverse((o) => {
       if (o.isMesh) {
         o.castShadow = o.receiveShadow = true;
         o.material.envMapIntensity = 0.65;
@@ -201,31 +227,19 @@ loader.load(
         rest[o.name] = { q: o.quaternion.clone(), p: o.position.clone() };
       }
     });
-    const b = new THREE.Box3().setFromObject(character),
+    const b = new THREE.Box3().setFromObject(characterVisual),
       s = b.getSize(new THREE.Vector3()),
       c = b.getCenter(new THREE.Vector3());
-    character.position.sub(c);
-    character.position.y += s.y / 2;
-    const scale = 2.05 / s.y;
-    character.scale.setScalar(scale);
-    character.position.set(1.35, 0, 0);
-    baseY = character.position.y;
+    characterVisual.position.set(-c.x, -b.min.y, -c.z);
+    character = new THREE.Group();
+    character.add(characterVisual);
+    character.scale.setScalar(1.72 / s.y);
+    character.position.set(1.0, 0, 0.65);
+    baseY = 0;
     scene.add(character);
-    mixer = new THREE.AnimationMixer(character);
+    mixer = new THREE.AnimationMixer(characterVisual);
     if (g.animations[0]) sampleAction = mixer.clipAction(g.animations[0]);
-    selectMode("sequence");
-    setTimeout(() => {
-      introPlaying = false;
-      controls.enabled = true;
-      selectMode("idle");
-      panel.style.opacity = "1";
-      panel.style.transform = "translateY(0)";
-      panel.style.pointerEvents = "auto";
-      document.querySelector("#hint").textContent =
-        "Scene complete · Choose a pose or drag to look";
-    }, 24000);
-    document.querySelector("#loading").style.opacity = 0;
-    setTimeout(() => document.querySelector("#loading").remove(), 500);
+    beginExperience();
   },
   (xhr) => {
     if (xhr.total) {
@@ -258,16 +272,31 @@ function resetRig() {
     b.position.copy(rest[name].p);
   }
 }
-function walk(t) {
-  const step = Math.sin(t * 6),
-    opp = Math.sin(t * 6 + Math.PI);
-  apply("L_Thigh", step * 0.48, 0, 0);
-  apply("R_Thigh", opp * 0.48, 0, 0);
-  apply("L_Calf", Math.max(0, -step) * 0.55, 0, 0);
-  apply("R_Calf", Math.max(0, -opp) * 0.55, 0, 0);
-  apply("L_Upperarm", opp * 0.25, 0, -0.08);
-  apply("R_Upperarm", step * 0.25, 0, 0.08);
-  apply("Pelvis", 0, 0, Math.sin(t * 12) * 0.035);
+const clamp01 = (v) => Math.max(0, Math.min(1, v));
+const smooth = (v) => {
+  v = clamp01(v);
+  return v * v * (3 - 2 * v);
+};
+function walk(t, weight = 1) {
+  const phase = t * 5.25;
+  const left = Math.sin(phase);
+  const right = -left;
+  const leftLift = Math.max(0, -left);
+  const rightLift = Math.max(0, -right);
+  apply("L_Thigh", left * 0.36 * weight, 0, -0.015 * weight);
+  apply("R_Thigh", right * 0.36 * weight, 0, 0.015 * weight);
+  apply("L_Calf", leftLift * 0.58 * weight, 0, 0);
+  apply("R_Calf", rightLift * 0.58 * weight, 0, 0);
+  apply("L_Foot", -left * 0.14 * weight, 0, 0);
+  apply("R_Foot", -right * 0.14 * weight, 0, 0);
+  apply("L_Upperarm", right * 0.24 * weight, 0, -0.08 * weight);
+  apply("R_Upperarm", left * 0.24 * weight, 0, 0.08 * weight);
+  apply("L_Forearm", -0.12 * weight, 0, -0.03 * weight);
+  apply("R_Forearm", -0.12 * weight, 0, 0.03 * weight);
+  apply("Pelvis", 0, Math.sin(phase) * 0.035 * weight, Math.sin(phase * 2) * 0.025 * weight);
+  apply("Waist", 0, -Math.sin(phase) * 0.045 * weight, 0);
+  apply("Spine02", 0, -Math.sin(phase) * 0.035 * weight, 0);
+  apply("Head", 0, Math.sin(phase) * 0.018 * weight, 0);
 }
 function hipSway(t) {
   apply("Pelvis", 0, Math.sin(t * 1.8) * 0.12, Math.sin(t * 2.4) * 0.15);
@@ -286,24 +315,56 @@ function pose(t) {
   apply("R_Upperarm", 0.15, -0.2, 0.32);
   apply("R_Forearm", -0.75, 0, 0.18);
 }
-function sit(t) {
-  apply("L_Thigh", -1.42, -0.12, -0.3);
-  apply("R_Thigh", -1.42, 0.12, 0.3);
-  apply("L_Calf", 1.48, 0, 0);
-  apply("R_Calf", 1.48, 0, 0);
-  apply("Pelvis", -0.12, 0, 0);
-  apply("Waist", 0.1, 0, 0);
-  apply("L_Upperarm", -0.25, 0, -0.18);
-  apply("R_Upperarm", -0.25, 0, 0.18);
-  character.position.set(-0.7, 1.02, -0.25);
-  character.rotation.y = -Math.PI * 0.5;
+const walkEnd = new THREE.Vector3(BED_CENTER.x + 1.85, 0, BED_CENTER.z);
+const standAtBed = new THREE.Vector3(
+  BED_CENTER.x,
+  0,
+  BED_CENTER.z + BED_SIZE.z * 0.5 + 0.48,
+);
+const seatedAtBed = new THREE.Vector3(
+  BED_CENTER.x,
+  0.2,
+  BED_CENTER.z + BED_SIZE.z * 0.5 - 0.08,
+);
+function approachBed(amount) {
+  const w = smooth(amount);
+  character.position.lerpVectors(walkEnd, standAtBed, w);
+  character.rotation.y = THREE.MathUtils.lerp(
+    MODEL_FORWARD_OFFSET + Math.PI * 0.5,
+    MODEL_FORWARD_OFFSET,
+    w,
+  );
+  apply("Head", 0, -0.16 * w, 0.03 * w);
+  apply("Pelvis", 0, 0, 0.04 * w);
+}
+function sit(amount = 1, t = 0) {
+  const w = smooth(amount);
+  apply("L_Thigh", -1.36 * w, -0.08 * w, -0.2 * w);
+  apply("R_Thigh", -1.36 * w, 0.08 * w, 0.2 * w);
+  apply("L_Calf", 1.42 * w, 0, 0);
+  apply("R_Calf", 1.42 * w, 0, 0);
+  apply("L_Foot", -0.18 * w, 0, 0);
+  apply("R_Foot", -0.18 * w, 0, 0);
+  apply("Pelvis", -0.1 * w, 0, 0);
+  apply("Waist", (0.08 + Math.sin(t * 1.2) * 0.012) * w, 0, 0);
+  apply("Spine02", -0.04 * w, 0, 0);
+  apply("L_Upperarm", -0.22 * w, 0, -0.16 * w);
+  apply("R_Upperarm", -0.22 * w, 0, 0.16 * w);
+  apply("L_Forearm", -0.25 * w, 0, -0.06 * w);
+  apply("R_Forearm", -0.25 * w, 0, 0.06 * w);
+  character.position.lerpVectors(standAtBed, seatedAtBed, w);
+  character.rotation.y = MODEL_FORWARD_OFFSET;
 }
 function cameraTease(t) {
-  pose(t);
-  apply("Head", -0.12, Math.sin(t * 1.3) * 0.28, 0.04);
-  apply("Pelvis", 0, Math.sin(t * 1.5) * 0.12, Math.sin(t * 2) * 0.12);
-  apply("Spine02", -0.09, Math.sin(t * 1.2) * -0.14, -0.05);
-  apply("R_Forearm", -1.05 + Math.sin(t * 2) * 0.12, 0, 0.3);
+  sit(1, t);
+  apply("L_Thigh", -1.34, -0.18, -0.34);
+  apply("R_Thigh", -1.34, 0.18, 0.34);
+  apply("Pelvis", -0.08, Math.sin(t * 1.25) * 0.07, Math.sin(t * 1.7) * 0.055);
+  apply("Waist", 0.12, -Math.sin(t * 0.8) * 0.09, 0);
+  apply("Spine02", -0.08, Math.sin(t * 0.8) * 0.07, -0.035);
+  apply("Head", -0.1, Math.sin(t * 0.72) * 0.2, 0.045);
+  apply("R_Upperarm", -0.2, -0.12, 0.27);
+  apply("R_Forearm", -0.72 + Math.sin(t * 1.8) * 0.08, 0, 0.2);
 }
 function wave(t) {
   apply("R_Upperarm", 0, -0.2, 1.7);
@@ -325,35 +386,35 @@ function animate() {
     let active = mode,
       local = t - modeStarted;
     if (mode === "sequence") {
-      const q = local % 24;
+      const q = Math.min(local, 27.999);
       const cameraGoals = {
-        walk: new THREE.Vector3(5.8, 2.7, 6.4),
-        sway: new THREE.Vector3(4.4, 2.25, 4.6),
-        pose: new THREE.Vector3(3.6, 2.05, 3.8),
-        sit: new THREE.Vector3(3.0, 1.8, 3.0),
-        camera: new THREE.Vector3(2.55, 1.68, 2.35),
+        walk: new THREE.Vector3(4.1, 2.35, 4.4),
+        approach: new THREE.Vector3(3.1, 2.0, 3.0),
+        sit: new THREE.Vector3(2.5, 1.72, 2.35),
+        seated: new THREE.Vector3(2.15, 1.55, 2.0),
+        camera: new THREE.Vector3(1.75, 1.48, 1.62),
       };
-      if (q < 7) {
+      if (q < 10) {
         active = "walk";
         local = q;
-      } else if (q < 11) {
-        active = "sway";
-        local = q - 7;
-      } else if (q < 15) {
-        active = "pose";
-        local = q - 11;
-      } else if (q < 20) {
+      } else if (q < 13) {
+        active = "approach";
+        local = q - 10;
+      } else if (q < 17) {
         active = "sit";
-        local = q - 15;
+        local = q - 13;
+      } else if (q < 22) {
+        active = "seated";
+        local = q - 17;
       } else {
         active = "camera";
-        local = q - 20;
+        local = q - 22;
       }
       camera.position.lerp(cameraGoals[active], 0.025);
       controls.target.lerp(
-        active === "sit" || active === "camera"
-          ? new THREE.Vector3(-0.7, 1.35, -0.25)
-          : new THREE.Vector3(0, 1.35, -0.7),
+        active === "sit" || active === "seated" || active === "camera"
+          ? new THREE.Vector3(BED_CENTER.x, 1.18, BED_CENTER.z + 0.45)
+          : new THREE.Vector3(BED_CENTER.x, 1.05, BED_CENTER.z),
         0.035,
       );
     }
@@ -363,17 +424,24 @@ function animate() {
     }
     if (active === "walk") {
       walk(t);
-      const a = local * 0.72;
+      const walkLocal = mode === "sequence" ? local : local % 10;
+      const a = (clamp01(walkLocal / 10) * Math.PI * 2) % (Math.PI * 2);
+      const rx = BED_SIZE.x * 0.5 + 0.8;
+      const rz = BED_SIZE.z * 0.5 + 0.75;
+      const dx = -rx * Math.sin(a);
+      const dz = rz * Math.cos(a);
       character.position.set(
-        1.35 + Math.sin(a) * 2.35,
-        baseY + Math.abs(Math.sin(t * 6)) * 0.035,
-        Math.cos(a) * 1.35 - 0.8,
+        BED_CENTER.x + rx * Math.cos(a),
+        baseY + Math.abs(Math.sin(t * 5.25)) * 0.022,
+        BED_CENTER.z + rz * Math.sin(a),
       );
-      character.rotation.y = a + Math.PI * 0.5;
+      character.rotation.y = Math.atan2(dx, dz) + MODEL_FORWARD_OFFSET;
     }
+    if (active === "approach") approachBed(local / 3);
     if (active === "sway") hipSway(t);
     if (active === "pose") pose(t);
-    if (active === "sit") sit(t);
+    if (active === "sit") sit(local / 4, t);
+    if (active === "seated") sit(1, t);
     if (active === "camera") cameraTease(t);
     if (active === "wave") wave(t);
   }
