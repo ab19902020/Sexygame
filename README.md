@@ -14,4 +14,4 @@ Then open `http://localhost:8080`.
 
 ## Character animation note
 
-The supplied GLB is a single static mesh: it contains no armature, skin joints, morph targets, or animation clips. The included controls therefore provide scene-level preview motions only. True limb animation (walk, sit, lie down, gestures) requires an armature/skin rig to be authored in Blender or a character-rigging service, then exported back to GLB. The loader is ready to receive a rigged replacement at `assets/character.glb`.
+The scene now uses the supplied 41-joint humanoid rig and its original sample clip. Runtime skeletal motions include idle breathing, walking around the bed, hip sway, standing pose, sitting, camera-aware posing, a playful wave, and an automatic bedroom performance sequence.
